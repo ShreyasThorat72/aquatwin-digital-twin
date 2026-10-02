@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 from sklearn.ensemble import IsolationForest
-from app.database.database import get_db_connection
+from app.database.database import db_execute
 
 MODEL_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "ml_models", "anomaly_detector.pkl"))
 
@@ -27,9 +27,11 @@ class AnomalyDetector:
         joblib.dump(self.model, MODEL_PATH)
 
     def train(self, contamination=0.1):
-        conn = get_db_connection()
-        df = pd.read_sql_query("SELECT distance_cm, water_height_cm, water_level_percent FROM telemetry ORDER BY id DESC LIMIT 500", conn)
-        conn.close()
+        rows = db_execute("SELECT distance_cm, water_height_cm, water_level_percent FROM telemetry ORDER BY id DESC LIMIT 500", fetchall=True)
+        if not rows:
+            df = pd.DataFrame()
+        else:
+            df = pd.DataFrame(rows)
 
         if len(df) < 10:
             return False, f"INSUFFICIENT DATA: Need at least 10 records for IsolationForest, have {len(df)}"

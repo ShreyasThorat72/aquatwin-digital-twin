@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 from datetime import datetime, time
-from app.database.database import get_db_connection
+from app.database.database import db_execute
 
 router = APIRouter(prefix="/api/shifts", tags=["shifts"])
 
@@ -35,9 +35,7 @@ def get_active_shift():
     remaining_str = f"{hours_left}h {rem_mins}m"
 
     # Get assigned operator for active shift
-    conn = get_db_connection()
-    emp = conn.execute("SELECT employee_id, name, designation FROM employees WHERE assigned_shift = ? AND status = 'Active' LIMIT 1", (shift_name,)).fetchone()
-    conn.close()
+    emp = db_execute("SELECT employee_id, name, designation FROM employees WHERE assigned_shift = ? AND status = 'Active' LIMIT 1", (shift_name,), fetchone=True)
 
     operator_info = dict(emp) if emp else {"employee_id": "EMP001", "name": "Operator 1", "designation": "Senior SCADA Operator"}
 
@@ -53,3 +51,4 @@ def get_active_shift():
             {"name": "Shift C", "hours": "16:00 - 00:00", "assigned": "EMP003 (Operator 3)"}
         ]
     }
+

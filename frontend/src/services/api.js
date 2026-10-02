@@ -1,6 +1,12 @@
 const getApiBaseUrl = () => {
   if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
   if (import.meta.env.VITE_API_BASE_URL) return import.meta.env.VITE_API_BASE_URL;
+  
+  // Auto-detect production environment if hostname is not localhost/127.0.0.1
+  if (typeof window !== 'undefined' && window.location && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    return 'https://aquatwin-digital-twin.onrender.com';
+  }
+  
   return 'http://localhost:8000';
 };
 
@@ -11,7 +17,7 @@ export const getWsUrl = () => {
   
   const apiBase = getApiBaseUrl();
   const wsProto = apiBase.startsWith('https') ? 'wss' : 'ws';
-  const hostPath = apiBase.replace(/^https?:\/\//, '');
+  const hostPath = apiBase.replace(/^https?:\/\//, '').replace(/\/$/, '');
   return `${wsProto}://${hostPath}/ws/telemetry`;
 };
 
@@ -42,3 +48,4 @@ export async function fetchApi(endpoint, options = {}) {
     throw err;
   }
 }
+

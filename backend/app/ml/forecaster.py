@@ -2,9 +2,9 @@ import os
 import joblib
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime
 from sklearn.ensemble import RandomForestRegressor
-from app.database.database import get_db_connection
+from app.database.database import db_execute
 
 MODEL_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "ml_models", "forecaster.pkl"))
 
@@ -37,9 +37,11 @@ class WaterForecaster:
 
     def train(self):
         """Train RandomForestRegressor on telemetry dataset from database."""
-        conn = get_db_connection()
-        df = pd.read_sql_query("SELECT timestamp, water_level_percent, volume_liters FROM telemetry ORDER BY id ASC", conn)
-        conn.close()
+        rows = db_execute("SELECT timestamp, water_level_percent, volume_liters FROM telemetry ORDER BY id ASC", fetchall=True)
+        if not rows:
+            df = pd.DataFrame()
+        else:
+            df = pd.DataFrame(rows)
 
         if len(df) < 10:
             return False, f"INSUFFICIENT TRAINING DATA: Need at least 10 historical records, currently have {len(df)}"
@@ -150,7 +152,7 @@ class WaterForecaster:
 
         time_to_low = "STABLE / RISING"
         if step_delta < 0:
-            rate_per_step = abs(step_delta) / 5.0 # per minute
+            rate_per_step = abs(step_delta) / 5.0
             if rate_per_step > 0:
                 mins = (current_level - 20.0) / rate_per_step
                 time_to_low = f"{round(max(0, mins), 1)} mins" if mins > 0 else "ALREADY LOW"

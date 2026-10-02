@@ -1,9 +1,9 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from datetime import datetime, timedelta
 from typing import Optional
 from jose import jwt
-from app.database.database import get_db_connection, hash_password
+from app.database.database import db_execute, hash_password
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -23,16 +23,13 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
 
 @router.post("/login")
 def login(req: LoginRequest):
-    conn = get_db_connection()
-    emp = conn.execute("SELECT * FROM employees WHERE employee_id = ?", (req.employee_id.upper(),)).fetchone()
+    emp = db_execute("SELECT * FROM employees WHERE employee_id = ?", (req.employee_id.upper(),), fetchone=True)
     
     if not emp:
-        conn.close()
         raise HTTPException(status_code=401, detail="Invalid Employee ID or Password")
 
     hashed = hash_password(req.password)
     if emp["password_hash"] != hashed:
-        conn.close()
         raise HTTPException(status_code=401, detail="Invalid Employee ID or Password")
 
     token = create_access_token({
@@ -44,12 +41,11 @@ def login(req: LoginRequest):
 
     # Log employee login
     now = datetime.now().isoformat()
-    conn.execute(
+    db_execute(
         "INSERT INTO system_logs (timestamp, employee_id, employee_name, module, level, description, system_state) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (now, emp["employee_id"], emp["name"], "AUTH", "INFO", f"Employee {emp['name']} ({emp['employee_id']}) logged in", "ONLINE")
+        (now, emp["employee_id"], emp["name"], "AUTH", "INFO", f"Employee {emp['name']} ({emp['employee_id']}) logged in", "ONLINE"),
+        commit=True
     )
-    conn.commit()
-    conn.close()
 
     return {
         "access_token": token,
@@ -70,12 +66,10 @@ def get_me(token: str):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         emp_id = payload.get("sub")
-        conn = get_db_connection()
-        emp = conn.execute("SELECT employee_id, name, department, designation, assigned_shift, role, status FROM employees WHERE employee_id = ?", (emp_id,)).fetchone()
-        conn.close()
+        emp = db_execute("SELECT employee_id, name, department, designation, assigned_shift, role, status FROM employees WHERE employee_id = ?", (emp_id,), fetchone=True)
         if not emp:
             raise HTTPException(status_code=404, detail="Employee not found")
-        return dict(emp)
+        return emp
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid token")
 
@@ -83,12 +77,10 @@ def get_me(token: str):
 def logout(req: dict):
     emp_id = req.get("employee_id", "UNKNOWN")
     emp_name = req.get("name", "Operator")
-    conn = get_db_connection()
     now = datetime.now().isoformat()
-    conn.execute(
+    db_execute(
         "INSERT INTO system_logs (timestamp, employee_id, employee_name, module, level, description, system_state) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (now, emp_id, emp_name, "AUTH", "INFO", f"Employee {emp_name} ({emp_id}) logged out", "ONLINE")
+        (now, emp_id, emp_name, "AUTH", "INFO", f"Employee {emp_name} ({emp_id}) logged out", "ONLINE"),
+        commit=True
     )
-    conn.commit()
-    conn.close()
     return {"message": "Logged out successfully"}

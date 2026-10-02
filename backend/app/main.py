@@ -1,6 +1,8 @@
 import asyncio
 import os
 import sys
+import json
+import re
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -73,19 +75,50 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS Configuration for local network, localhost & production Vercel origins
-cors_env = os.environ.get("CORS_ORIGINS", "")
+# Robust CORS Configuration supporting JSON lists, comma-separated strings, trailing slashes, quotes, and Vercel domains
+cors_env = os.environ.get("CORS_ORIGINS", "").strip()
+
+default_origins = [
+    "https://aquatwin-digital-twin-6ozq.vercel.app",
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:3000",
+]
+
+allowed_origins = list(default_origins)
+
 if cors_env:
-    allowed_origins = [origin.strip() for origin in cors_env.split(",") if origin.strip()]
-else:
-    allowed_origins = ["*"]
+    is_json = False
+    if cors_env.startswith("[") and cors_env.endswith("]"):
+        try:
+            parsed = json.loads(cors_env)
+            if isinstance(parsed, list):
+                is_json = True
+                for item in parsed:
+                    clean = str(item).strip().strip("'\"").rstrip("/")
+                    if clean and clean not in allowed_origins:
+                        allowed_origins.append(clean)
+        except Exception:
+            is_json = False
+
+    if not is_json:
+        for raw in cors_env.split(","):
+            clean = raw.strip().strip("'\"").rstrip("/")
+            if clean and clean not in allowed_origins:
+                allowed_origins.append(clean)
+
+allow_all_origins = "*" in allowed_origins or cors_env == "*"
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
+    allow_origins=["*"] if allow_all_origins else allowed_origins,
+    allow_origin_regex=None if allow_all_origins else r"https://.*\.vercel\.app",
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=600,
 )
 
 # Include Routers

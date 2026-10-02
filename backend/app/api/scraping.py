@@ -5,7 +5,7 @@ import pandas as pd
 from bs4 import BeautifulSoup
 from fastapi import APIRouter, HTTPException
 from datetime import datetime
-from app.database.database import get_db_connection
+from app.database.database import db_execute
 
 router = APIRouter(prefix="/api/scraping", tags=["scraping"])
 
@@ -27,8 +27,10 @@ TARGET_SOURCES = [
 ]
 
 @router.get("/run")
+@router.post("/run")
 def trigger_web_scraping():
     os.makedirs(SCRAPED_DIR, exist_ok=True)
+
     results = []
 
     for source in TARGET_SOURCES:
@@ -42,7 +44,7 @@ def trigger_web_scraping():
             if resp.status_code == 200:
                 data = resp.json()
                 
-                # Format into pandas dataframe for tabular saving
+                # Format into pandas dataframe for tabular CSV saving
                 timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
                 filename = f"{source_id}_{timestamp_str}.csv"
                 file_path = os.path.join(SCRAPED_DIR, filename)
@@ -55,14 +57,12 @@ def trigger_web_scraping():
 
                 df.to_csv(file_path, index=False)
 
-                # Save record to sqlite database
-                conn = get_db_connection()
-                conn.execute(
+                # Save record to database using universal db_execute helper
+                db_execute(
                     "INSERT INTO scraped_data (timestamp, dataset_type, source_name, data_json) VALUES (?, ?, ?, ?)",
-                    (datetime.now().isoformat(), ds_type, source_name, json.dumps(data)[:1000])
+                    (datetime.now().isoformat(), ds_type, source_name, json.dumps(data)[:1000]),
+                    commit=True
                 )
-                conn.commit()
-                conn.close()
 
                 results.append({
                     "source": source_name,
@@ -93,12 +93,13 @@ def get_scraped_datasets():
     os.makedirs(SCRAPED_DIR, exist_ok=True)
     files = [f for f in os.listdir(SCRAPED_DIR) if f.endswith(".csv") or f.endswith(".json")]
     
-    conn = get_db_connection()
-    rows = conn.execute("SELECT id, timestamp, dataset_type, source_name, data_json FROM scraped_data ORDER BY id DESC LIMIT 20").fetchall()
-    conn.close()
+    rows = db_execute(
+        "SELECT id, timestamp, dataset_type, source_name, data_json FROM scraped_data ORDER BY id DESC LIMIT 20",
+        fetchall=True
+    )
 
     return {
         "saved_files": files,
-        "database_records": [dict(r) for r in rows],
+        "database_records": rows or [],
         "available_sources": TARGET_SOURCES
     }

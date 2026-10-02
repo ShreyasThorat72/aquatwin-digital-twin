@@ -21,7 +21,6 @@ def get_db_connection():
     if is_postgres():
         import psycopg2
         import psycopg2.extras
-        # Handle Render postgresql:// vs postgres:// URL prefix
         url = DATABASE_URL
         if url.startswith("postgres://"):
             url = url.replace("postgres://", "postgresql://", 1)
@@ -31,6 +30,34 @@ def get_db_connection():
         conn = sqlite3.connect(DB_PATH, check_same_thread=False)
         conn.row_factory = sqlite3.Row
         return conn
+
+def db_execute(query: str, params: tuple = (), fetchone: bool = False, fetchall: bool = False, commit: bool = False):
+    """
+    Universal database query execution helper supporting both SQLite and PostgreSQL connections.
+    Converts '?' parameter placeholders to '%s' when running against PostgreSQL.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    if is_postgres():
+        pg_query = query.replace("?", "%s")
+        cursor.execute(pg_query, params)
+    else:
+        cursor.execute(query, params)
+
+    result = None
+    if fetchone:
+        row = cursor.fetchone()
+        result = dict(row) if row else None
+    elif fetchall:
+        rows = cursor.fetchall()
+        result = [dict(r) for r in rows]
+
+    if commit:
+        conn.commit()
+
+    conn.close()
+    return result
 
 def init_db():
     conn = get_db_connection()

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { fetchApi } from '../services/api';
+import { fetchApi, API_BASE_URL } from '../services/api';
 import { FileSpreadsheet, Download, Eye, RefreshCw, Search } from 'lucide-react';
 
 export default function CsvConsole() {
@@ -32,8 +32,9 @@ export default function CsvConsole() {
   };
 
   const handleDownload = (category, filename) => {
-    window.open(`http://localhost:8000/api/csv/download/${category}/${filename}`, '_blank');
+    window.open(`${API_BASE_URL}/api/csv/download/${category}/${filename}`, '_blank');
   };
+
 
   return (
     <div>

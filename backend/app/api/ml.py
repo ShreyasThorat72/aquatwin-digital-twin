@@ -2,16 +2,13 @@ from fastapi import APIRouter
 from app.ml.forecaster import water_forecaster
 from app.ml.anomaly_detector import anomaly_detector
 from app.services.telemetry_service import telemetry_service
-from app.database.database import get_db_connection
+from app.database.database import db_execute
 
 router = APIRouter(prefix="/api/ml", tags=["ml"])
 
 @router.get("/status")
 def get_ml_status():
-    conn = get_db_connection()
-    count_row = conn.execute("SELECT COUNT(*) as cnt FROM telemetry").fetchone()
-    conn.close()
-
+    count_row = db_execute("SELECT COUNT(*) as cnt FROM telemetry", fetchone=True)
     total_samples = count_row["cnt"] if count_row else 0
 
     return {
@@ -37,13 +34,11 @@ def train_ml_models():
     # Train anomaly detector
     a_success, a_msg = anomaly_detector.train()
 
-    conn = get_db_connection()
-    conn.execute(
+    db_execute(
         "INSERT INTO system_logs (timestamp, employee_id, employee_name, module, level, description) VALUES (datetime('now'), 'EMP001', 'Operator', 'ML_ENGINE', 'INFO', ?)",
-        (f"ML Models retrained. Forecaster: {f_msg}, Anomaly: {a_msg}",)
+        (f"ML Models retrained. Forecaster: {f_msg}, Anomaly: {a_msg}",),
+        commit=True
     )
-    conn.commit()
-    conn.close()
 
     return {
         "status": "success",

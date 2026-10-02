@@ -1,14 +1,12 @@
 from fastapi import APIRouter
 from typing import Optional
 import pandas as pd
-from app.database.database import get_db_connection
+from app.database.database import db_execute
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 
 @router.get("")
 def get_analytics(source: Optional[str] = None):
-    conn = get_db_connection()
-    
     query = "SELECT * FROM telemetry"
     params = []
     if source and source != "ALL":
@@ -16,14 +14,21 @@ def get_analytics(source: Optional[str] = None):
         params.append(source)
     query += " ORDER BY id DESC LIMIT 500"
 
-    df = pd.read_sql_query(query, conn, params=params)
+    rows = db_execute(query, tuple(params), fetchall=True)
+    if rows:
+        df = pd.DataFrame([dict(r) for r in rows])
+    else:
+        df = pd.DataFrame()
 
     # Count alarms & leaks
-    alarm_count = conn.execute("SELECT COUNT(*) as c FROM alarms").fetchone()["c"]
-    leak_count = conn.execute("SELECT COUNT(*) as c FROM alarms WHERE alarm_type = 'POSSIBLE_LEAK'").fetchone()["c"]
-    anomaly_count = conn.execute("SELECT COUNT(*) as c FROM alarms WHERE alarm_type = 'ANOMALY_DETECTED'").fetchone()["c"]
+    alarm_count_row = db_execute("SELECT COUNT(*) as c FROM alarms", fetchone=True)
+    alarm_count = alarm_count_row["c"] if alarm_count_row else 0
 
-    conn.close()
+    leak_count_row = db_execute("SELECT COUNT(*) as c FROM alarms WHERE alarm_type = 'POSSIBLE_LEAK'", fetchone=True)
+    leak_count = leak_count_row["c"] if leak_count_row else 0
+
+    anomaly_count_row = db_execute("SELECT COUNT(*) as c FROM alarms WHERE alarm_type = 'ANOMALY_DETECTED'", fetchone=True)
+    anomaly_count = anomaly_count_row["c"] if anomaly_count_row else 0
 
     if df.empty:
         return {
@@ -58,3 +63,4 @@ def get_analytics(source: Optional[str] = None):
         },
         "chart_data": chart_data
     }
+
