@@ -1,0 +1,5 @@
+employee_id,name,department,designation,assigned_shift,role,status,joining_date
+EMP001,Operator 1,Water Operations,Senior SCADA Operator,Shift A,Operator,Active,2024-01-15
+EMP002,Operator 2,Water Operations,SCADA Technician,Shift B,Operator,Active,2024-03-01
+EMP003,Operator 3,Field Operations,Junior Operator,Shift C,Operator,Active,2024-06-10
+ADMIN001,Supervisor Admin,Plant Management,Chief Systems Supervisor,Shift B,Admin,Active,2023-11-01
